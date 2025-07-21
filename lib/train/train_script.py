@@ -63,7 +63,7 @@ def run(settings):
         net = DDP(net, broadcast_buffers=False, device_ids=[settings.local_rank], find_unused_parameters=True)
         settings.device = torch.device("cuda:%d" % settings.local_rank)
     else:
-        settings.device = torch.device("cuda:0")
+        settings.device = torch.device("cuda:0")#TODO
     # Loss functions and Actors
     if settings.script_name == "seqtrack":
         bins = cfg.MODEL.BINS

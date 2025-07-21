@@ -19,25 +19,14 @@ DATA:
     FACTOR: 4.0
     SCALE_JITTER: 0
     SIZE: 256
-    NUMBER: 2
+    NUMBER: 1
   TRAIN:
     DATASETS_NAME:
-    - LASOT
-    - REFCOCOG
-    - TNL2K_train
-    - OTB99_train
-    - DepthTrack_train
-    - VisEvent
-    - LasHeR_train
+    - MY_DATA
     DATASETS_RATIO:
     - 1
-    - 1
-    - 1
-    - 1
-    - 4
-    - 4
-    - 4
     SAMPLE_PER_EPOCH: 60000
+
 MODEL:
   LANGUAGE:
     TYPE: 'bert-base-uncased'
@@ -59,8 +48,9 @@ MODEL:
   FEATURE_TYPE: x
   INTERFACE_TYPE: low-rank_add
   INTERFACE_DIM: 32
+
 TRAIN:
-  BATCH_SIZE: 32
+  BATCH_SIZE: 4
   EPOCH: 240
   GRAD_CLIP_NORM: 0.1
   CE_WEIGHT: 1.0
@@ -76,6 +66,7 @@ TRAIN:
   TYPE: peft
   FIX_BN: True
   PRETRAINED_PATH: 'pretrained/seqtrack/seqtrack_b256/SEQTRACK_ep0500.pth.tar'
+
 TEST:
   EPOCH: 240
   SEARCH_FACTOR: 4.0
@@ -83,5 +74,5 @@ TEST:
   TEMPLATE_FACTOR: 4.0
   TEMPLATE_SIZE: 256
   WINDOW: true
-  NUM_TEMPLATES: 2
+  NUM_TEMPLATES: 1
 

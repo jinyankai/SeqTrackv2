@@ -275,3 +275,50 @@ def get_target_depth(depth, target_box):
         target_depth = median_depth
 
     return target_depth
+
+
+
+def merge_img(rgb , depth , dtype = 'rgbrgb'):
+    img = rgb.copy()
+    dp = depth.copy()
+    if dtype == 'color':
+        img = rgb
+
+    elif dtype == 'raw_x':
+        img = dp
+
+    elif dtype == 'colormap':
+        dp = cv2.normalize(dp, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
+        dp = np.asarray(dp, dtype=np.uint8)
+        img = cv2.applyColorMap(dp, cv2.COLORMAP_JET)
+
+    elif dtype == '3x':
+        dp = cv2.normalize(dp, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
+        dp = np.asarray(dp, dtype=np.uint8)
+        img = cv2.merge((dp, dp, dp))
+
+    elif dtype == 'normalized_x':
+        dp = cv2.normalize(dp, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
+        img = np.asarray(dp, dtype=np.uint8)
+
+    elif dtype == 'rgbcolormap':
+        dp = cv2.normalize(dp, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
+        dp = np.asarray(dp, dtype=np.uint8)
+        colormap = cv2.applyColorMap(dp, cv2.COLORMAP_JET)  # (h,w) -> (h,w,3)
+        img = cv2.merge((rgb, colormap))  # (h,w,6)
+
+    elif dtype == 'rgb3x':
+        dp = cv2.normalize(dp, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
+        dp = np.asarray(dp, dtype=np.uint8)
+        dp = cv2.merge((dp, dp, dp))
+        img = cv2.merge((rgb, dp))
+
+    elif dtype == 'rgbrgb':
+        dp = cv2.cvtColor(dp, cv2.COLOR_BGR2RGB)
+        img = cv2.merge((rgb, dp))
+
+    else:
+        print('No such dtype !!! ')
+        img = None
+
+    return img

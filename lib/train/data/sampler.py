@@ -1,5 +1,8 @@
 import random
 import torch.utils.data
+from torch.utils.data import Sampler
+
+from lib.train.dataset.our_data import MyDataset
 from lib.utils import TensorDict
 import numpy as np
 from pytorch_pretrained_bert import BertTokenizer
@@ -45,10 +48,13 @@ class TrackingSampler(torch.utils.data.Dataset):
         # If p not provided, sample uniformly from all videos
         if p_datasets is None:
             p_datasets = [len(d) for d in self.datasets]
+            print("1",p_datasets)
 
         # Normalize
         p_total = sum(p_datasets)
+        # print("total",p_total)
         self.p_datasets = [x / p_total for x in p_datasets]
+        # print(len(self.p_datasets) , len(self.datasets[0]))
 
         self.samples_per_epoch = samples_per_epoch
         self.max_gap = max_gap
@@ -123,6 +129,7 @@ class TrackingSampler(torch.utils.data.Dataset):
             # sample a sequence from the given dataset
             seq_id, visible, seq_info_dict = self.sample_seq_from_dataset(dataset, is_video_dataset)
 
+
             if is_video_dataset:
                 template_frame_ids = None
                 search_frame_ids = None
@@ -131,11 +138,14 @@ class TrackingSampler(torch.utils.data.Dataset):
                 if self.frame_sample_mode == 'causal':
                     # Sample test and train frames in a causal manner, i.e. search_frame_ids > template_frame_ids
                     while search_frame_ids is None:
+
                         base_frame_id = self._sample_visible_ids(visible, num_ids=1, min_id=self.num_template_frames - 1,
                                                                  max_id=len(visible) - self.num_search_frames)
+
                         prev_frame_ids = self._sample_visible_ids(visible, num_ids=self.num_template_frames - 1,
                                                                   min_id=base_frame_id[0] - self.max_gap - gap_increase,
                                                                   max_id=base_frame_id[0])
+
                         if prev_frame_ids is None:
                             gap_increase += 5
                             if gap_increase > 1000:
@@ -167,6 +177,7 @@ class TrackingSampler(torch.utils.data.Dataset):
                 search_frames, search_anno, meta_obj_test = dataset.get_frames(seq_id, search_frame_ids, seq_info_dict)
 
                 H, W, _ = template_frames[0].shape
+
                 template_masks = template_anno['mask'] if 'mask' in template_anno else [torch.zeros((H, W))] * self.num_template_frames
                 search_masks = search_anno['mask'] if 'mask' in search_anno else [torch.zeros((H, W))] * self.num_search_frames
                 data = TensorDict({'template_images': template_frames,
@@ -178,6 +189,7 @@ class TrackingSampler(torch.utils.data.Dataset):
                                    'dataset': dataset.get_name(),
                                    'test_class': meta_obj_test.get('object_class_name')})
 
+
                 # tokenize language
                 if self.multi_modal_language:
                     # nlp = template_anno['nlp'][0]
@@ -187,11 +199,13 @@ class TrackingSampler(torch.utils.data.Dataset):
                         nlp_token_ids, nlp_token_masks = self.extract_token_from_nlp(nlp, self.max_query_len)
                         data['nl_token_ids'] = nlp_token_ids
                         data['nl_token_masks'] = nlp_token_masks
+
                 # make data augmentation
                 data = self.processing(data)
 
                 # check whether data is valid
                 valid = data['valid']
+                ## TODO
             except Exception as e:
                 print(f"data sampler bug: {e}")
                 valid = False
@@ -206,6 +220,7 @@ class TrackingSampler(torch.utils.data.Dataset):
         # self.show(data, 'template', 1, 'dte')
         # self.show(data, 'search', 0, 'rgb')
         # self.show(data, 'search', 0, 'dte')
+
         return data
 
     def show(self, data, strr, i, modality):
@@ -477,3 +492,73 @@ class TrackingSampler(torch.utils.data.Dataset):
         assert len(input_type_ids) == seq_length
 
         return input_ids, input_mask
+
+
+if __name__ == '__main__':
+    import sys
+    sys.path.append('/home/jinyankai/PycharmProject/SeqTrackv2/lib/train/dataset')
+    from our_data import MyDataset
+    NUM_SEQUENCES = 1
+    NUM_FRAMES = 3000
+    BATCH_SIZE = 4
+    SAMPLES_PER_EPOCH = 5
+    NUM_TEMPLATE_FRAMES = 1
+    NUM_SEARCH_FRAMES = 1
+    dataset_root = '/home/jinyankai/PycharmProject/SeqTrackv2/data'
+    try:
+        datasets = MyDataset(name='my_multi_sequence_dataset', root_path=dataset_root)
+        sampler = TrackingSampler(datasets=[datasets] , p_datasets=None,
+                samples_per_epoch=SAMPLES_PER_EPOCH,
+                max_gap=10,
+                num_search_frames=NUM_SEARCH_FRAMES,
+                num_template_frames=NUM_TEMPLATE_FRAMES)
+        print("成功实例化 TrackingSampler。")
+
+        # 5. 实例化 DataLoader
+        # PyTorch 的默认 collate_fn 足够智能，可以处理这种结构
+        data_loader = torch.utils.data.DataLoader(
+            sampler,
+            batch_size=BATCH_SIZE,
+            shuffle=False,
+            num_workers=0
+        )
+        print(f"成功实例化 DataLoader with batch_size={BATCH_SIZE}。")
+
+        # 6. 迭代并检查数据
+        print("\n--- 开始测试数据加载 ---")
+        for i, data in enumerate(data_loader):
+            if i >= 3:  # 只测试前3个批次
+                break
+
+            print(f"\n[批次 {i + 1}]")
+            print("  数据包键:", list(data.keys()))
+
+            # 检查模板数据
+            # 期望形状: [Batch, NumFrames, Height, Width, Channels]
+            # 由于我们把NumFrames=1的数据堆叠起来，所以形状是 [B, H, W, C]
+            template_images = data['template_images']
+            template_annos = data['template_anno']
+            print(f"  - template_images shape: {template_images[0].shape} (Batch, H, W, Channels)")
+            print(f"  - template_images dtype: {template_images[0].dtype}")
+            print(f"  - template_anno shape:   {template_annos[0].shape} (Batch, NumFrames, 4)")
+            print(f"  - template_anno dtype:   {template_annos[0].dtype}")
+
+            # 检查搜索数据
+            search_images = data['search_images']
+            search_annos = data['search_anno']
+            print(f"  - search_images shape:   {search_images[0].shape} (Batch, H, W, Channels)")
+            print(f"  - search_images dtype:   {search_images[0].dtype}")
+            print(f"  - search_anno shape:     {search_annos[0].shape} (Batch, NumFrames, 4)")
+            print(f"  - search_anno dtype:     {search_annos[0].dtype}")
+            print(f"  - dataset:               {data['dataset']}")
+
+        print("\n--- 测试成功 ---")
+        print("输出的数据形状符合预期，MyDataset 和 TrackingSampler 看起来已正确适配。")
+
+    except Exception as e:
+        print(f"\n--- 测试失败 ---")
+        print(f"发生错误: {e}")
+        import traceback
+
+        traceback.print_exc()
+

@@ -72,7 +72,8 @@ class SeqTrackDecoder(nn.Module):
             'otb99_lang': bins+5,
             'refcocog': bins+5,
             'tnl2k': bins+5,
-            'lasot_lang': bins+5
+            'lasot_lang': bins+5,
+            "MY_DATA": bins+2
         }
         instruct_vocab_size = 4 # should be consistent with new tokens in self.instruct_tokens
 

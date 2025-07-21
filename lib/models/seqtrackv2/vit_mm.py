@@ -254,7 +254,7 @@ class VisionTransformerMM(nn.Module):
 
         self.instruct = instruct
         if instruct:
-            num_embeddings = 4
+            num_embeddings = 5
             self.prompt_embeddings = nn.Embedding(num_embeddings, embed_dim) # should be consistent with new tokens in decoder.instruct_tokens
 
         self.norm = norm_layer(embed_dim)
@@ -286,6 +286,7 @@ class VisionTransformerMM(nn.Module):
         num_template = len(template_list)
         num_search = len(search_list)
         if self.instruct:
+
             instruct_embedding = self.prompt_embeddings(seq).unsqueeze(1)
 
         z = torch.stack(template_list, dim=1)#(b,n,c,h,w)
