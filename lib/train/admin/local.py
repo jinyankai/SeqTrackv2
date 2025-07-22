@@ -1,8 +1,9 @@
 class EnvironmentSettings:
     def __init__(self):
         self.workspace_dir = '/home/jinyankai/PycharmProject/SeqTrackv2'    # Base directory for saving network checkpoints.
-        self.tensorboard_dir = '/home/jinyankai/PycharmProject/SeqTrackv2/tensorboard'    # Directory for tensorboard files.
+        self.tensorboard_dir = '/home/jinyankai/PycharmProject/SeqTrackv2/tensorboard' # Directory for tensorboard files.
         self.pretrained_networks = '/home/jinyankai/PycharmProject/SeqTrackv2/pretrained_networks'
+        self.output_files = '/home/jinyankai/PycharmProject/SeqTrackv2/output.txt'
         self.lasot_dir = '/home/jinyankai/PycharmProject/SeqTrackv2/data/lasot'
         self.got10k_dir = '/home/jinyankai/PycharmProject/SeqTrackv2/data/got10k/train'
         self.lasot_lmdb_dir = '/home/jinyankai/PycharmProject/SeqTrackv2/data/lasot_lmdb'

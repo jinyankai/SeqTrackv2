@@ -48,13 +48,11 @@ class TrackingSampler(torch.utils.data.Dataset):
         # If p not provided, sample uniformly from all videos
         if p_datasets is None:
             p_datasets = [len(d) for d in self.datasets]
-            print("1",p_datasets)
 
         # Normalize
         p_total = sum(p_datasets)
-        # print("total",p_total)
         self.p_datasets = [x / p_total for x in p_datasets]
-        # print(len(self.p_datasets) , len(self.datasets[0]))
+
 
         self.samples_per_epoch = samples_per_epoch
         self.max_gap = max_gap
@@ -205,7 +203,6 @@ class TrackingSampler(torch.utils.data.Dataset):
 
                 # check whether data is valid
                 valid = data['valid']
-                ## TODO
             except Exception as e:
                 print(f"data sampler bug: {e}")
                 valid = False
