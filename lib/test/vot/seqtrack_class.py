@@ -19,7 +19,7 @@ from lib.train.dataset.depth_utils import get_rgbd_frame
 class seqtrackv2(object):
     def __init__(self, tracker_name='', para_name=''):
         # create tracker
-        tracker_info = Tracker(tracker_name, para_name, "depthtrack", None)
+        tracker_info = Tracker(tracker_name, para_name, "our_data", None)
         params = tracker_info.get_parameters()
         params.visualization = False
         params.debug = False
@@ -30,13 +30,15 @@ class seqtrackv2(object):
         file = open(txt_path, 'a')
         file.write(str)
 
-    def initialize(self, img_rgb, selection):
+    def initialize(self, img_rgb, selection, nlp = None):
         # init on the 1st frame
         # region = rect_from_mask(mask)
         x, y, w, h = selection
         bbox = [x,y,w,h]
         self.H, self.W, _ = img_rgb.shape
         init_info = {'init_bbox': bbox}
+        if nlp is not None:
+            init_info['init_nlp'] = nlp.word_tokenize(init_info['init_bbox'])
         _ = self.tracker.initialize(img_rgb, init_info)
 
     def track(self, img_rgb):
@@ -61,6 +63,7 @@ def run_vot_exp(tracker_name, para_name, vis=False, out_conf=False, channel_type
 
     selection = handle.region()
     imagefile = handle.frame()
+
     if not imagefile:
         sys.exit(0)
     if vis:

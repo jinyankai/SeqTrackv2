@@ -24,6 +24,7 @@ class EnvSettings:
         self.got_packed_results_path = ''
         self.got_reports_path = ''
         self.tn_packed_results_path = ''
+        self.our_data_path = '/home/jinyankai/PycharmProject/SeqTrackv2/data/our_data'
 
 
 def create_default_local_file():

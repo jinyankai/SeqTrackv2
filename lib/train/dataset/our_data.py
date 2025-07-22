@@ -58,8 +58,10 @@ class MyDataset(BaseVideoDataset):
                 continue
 
             bboxes = self._load_bboxes(bbox_file_path)
+            descriptions = []
             with open(desc_file_path, 'r', encoding='utf-8') as f:
                 description = f.readline().strip()
+            descriptions.append(description)
 
             image_files = sorted(os.listdir(img_folder_path))
 
@@ -82,7 +84,7 @@ class MyDataset(BaseVideoDataset):
             # 将整个序列的信息作为一个字典添加到列表中
             sequences.append({
                 'class': class_name,
-                'description': description,
+                'description': descriptions,
                 'frames': frames,
             })
 
@@ -169,7 +171,8 @@ class MyDataset(BaseVideoDataset):
             anno_list.append(frame_info['bbox'])
 
         # 格式化标注
-        anno_frames = {'bbox': anno_list }
+        anno_frames = {'bbox': anno_list,
+                       'nlp' : sequence['description']}
 
         object_meta = OrderedDict({
             'object_class_name': class_name,
