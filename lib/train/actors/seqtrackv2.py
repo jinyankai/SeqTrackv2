@@ -105,6 +105,7 @@ class SeqTrackV2Actor(BaseActor):
         boxes_target = targets_seq.reshape(-1,5)[:,0:-1]
         boxes_pred = box_cxcywh_to_xyxy(boxes_pred)
         boxes_target = box_cxcywh_to_xyxy(boxes_target)
+        self.extract_and_save_boxes(boxes_pred, self.settings.env.output_files)
         iou = box_iou(boxes_pred, boxes_target)[0].mean()
 
         if return_status:
@@ -114,6 +115,45 @@ class SeqTrackV2Actor(BaseActor):
             return loss, status
         else:
             return loss
+
+    def extract_and_save_boxes(self, boxes_pred_cxcywh, filepath:str, save_format:str='cxcywh'):
+        """
+        Extracts predicted bounding boxes from model outputs and saves them to a text file.
+
+        Each box is written to a new line in the file.
+
+        Args:
+            boxes_pred_cxcywh (torch.Tensor): The raw output tensor from the model.
+            filepath (str): The path to the text file where boxes should be saved.
+            save_format (str): The format to save the boxes in ('xyxy' or 'cxcywh').
+                               Defaults to 'cxcywh'.
+        """
+        print(f"Extracting boxes and saving to {filepath}...")
+        # Disable gradient calculation for this operation as it's not for training
+        with torch.no_grad():
+            if save_format == 'xyxy':
+                boxes_to_save = box_cxcywh_to_xyxy(boxes_pred_cxcywh)
+            elif save_format == 'cxcywh':
+                boxes_to_save = boxes_pred_cxcywh
+            else:
+                raise ValueError("save_format must be either 'xyxy' or 'cxcywh'")
+
+            # --- File writing operation ---
+            try:
+                # Open the file in append mode ('a') to add new lines without
+                # overwriting existing content. Use 'w' to overwrite the file each time.
+                with open(filepath, 'a') as f:
+                    # Iterate over each predicted box in the batch
+                    for box in boxes_to_save:
+                        # Convert tensor elements to a list of numbers, then to strings
+                        # We round to a few decimal places for cleaner output
+                        box_coords = [f"{coord.item():.4f}" for coord in box]
+                        # Join coordinates with a comma and write to file with a newline
+                        line = ",".join(box_coords)
+                        f.write(line + '\n')
+                print(f"Successfully wrote {len(boxes_to_save)} boxes.")
+            except IOError as e:
+                print(f"Error: Could not write to file {filepath}. Reason: {e}")
 
     def to(self, device):
         """ Move the network to device
