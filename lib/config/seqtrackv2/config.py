@@ -63,6 +63,7 @@ cfg.TRAIN.FIX_BN = False
 cfg.TRAIN.SCHEDULER = edict()
 cfg.TRAIN.SCHEDULER.TYPE = "step"
 cfg.TRAIN.SCHEDULER.DECAY_RATE = 0.1
+cfg.TRAIN.SCHEDULER.T_MAX = 240
 cfg.TRAIN.TYPE = "peft" # peft or fft
 cfg.TRAIN.PRETRAINED_PATH = None
 
