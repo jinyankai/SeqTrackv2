@@ -1,160 +1,293 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
-import pdb
+import os
+import random
+import glob
 import cv2
 import torch
-# import vot
 import sys
 import time
-import os
+import shutil
+import numpy as np
 from lib.test.evaluation import Tracker
-import our_data
-from lib.test.vot.vot22_utils import *
-from lib.train.dataset.depth_utils import get_rgbd_frame,merge_img
+from lib.train.dataset.depth_utils import get_rgbd_frame
 from lib.utils.box_ops import box_cxcywh_to_xyxy
 
+# ====================================================================================
+# Part 0: Evaluation Functions 
+# ====================================================================================
 
-class seqtrackv2(object):
+def calculate_iou(box_a, box_b):
+    """
+    计算两个边界框的IoU (Intersection over Union)。
+    边界框格式为 [x, y, w, h]。
+
+    Args:
+        box_a (list or np.array): 第一个边界框。
+        box_b (list or np.array): 第二个边界框。
+
+    Returns:
+        float: 两个边界框的IoU值。
+    """
+    # 转换为 [x1, y1, x2, y2] 格式
+    x1_a, y1_a, w_a, h_a = box_a
+    x2_a, y2_a = x1_a + w_a, y1_a + h_a
+    
+    x1_b, y1_b, w_b, h_b = box_b
+    x2_b, y2_b = x1_b + w_b, y1_b + h_b
+
+    # 计算交集矩形的坐标
+    x1_inter = max(x1_a, x1_b)
+    y1_inter = max(y1_a, y1_b)
+    x2_inter = min(x2_a, x2_b)
+    y2_inter = min(y2_a, y2_b)
+
+    # 计算交集面积
+    inter_area = max(0, x2_inter - x1_inter) * max(0, y2_inter - y1_inter)
+
+    # 计算并集面积
+    area_a = w_a * h_a
+    area_b = w_b * h_b
+    union_area = area_a + area_b - inter_area
+
+    # 计算IoU
+    iou = inter_area / union_area if union_area > 0 else 0.0
+    return iou
+
+def calculate_auc(pred_boxes, gt_boxes, thresholds=np.arange(0.0, 1.05, 0.05)):
+    """
+    根据预测框和真实框计算成功率曲线下的面积 (AUC)。
+
+    Args:
+        pred_boxes (list of lists): 预测的边界框列表。
+        gt_boxes (list of lists): 真实的边界框列表。
+        thresholds (np.array): 用于计算成功率的IoU阈值。
+
+    Returns:
+        float: AUC得分。
+    """
+    if len(pred_boxes) != len(gt_boxes):
+        raise ValueError("预测框和真实框的数量必须相等。")
+
+    num_frames = len(pred_boxes)
+    if num_frames == 0:
+        return 0.0
+
+    ious = [calculate_iou(pred, gt) for pred, gt in zip(pred_boxes, gt_boxes)]
+    
+    success_rates = []
+    for th in thresholds:
+        success_count = sum(1 for iou in ious if iou >= th)
+        success_rates.append(success_count / num_frames)
+        
+    # AUC是所有成功率的平均值
+    auc = np.mean(success_rates)
+    return auc
+
+
+# ====================================================================================
+# Part 1: Enhanced TestDataset Class
+# ====================================================================================
+
+class TestDataset:
+    """
+    用于加载和采样特定结构的测试数据集的类。
+    """
+    def __init__(self, root_dir):
+        if not os.path.isdir(root_dir):
+            raise ValueError(f"提供的根目录不存在: {root_dir}")
+        self.root_dir = root_dir
+        self.categories = sorted([cat for cat in os.listdir(root_dir) 
+                                  if os.path.isdir(os.path.join(root_dir, cat))])
+        if not self.categories:
+            print(f"警告: 在目录 {root_dir} 中没有找到任何类别文件夹。")
+        else:
+            print(f"成功初始化数据集，找到 {len(self.categories)} 个类别: {self.categories}")
+
+    def _parse_bbox(self, bbox_str):
+        try:
+            return [float(coord) for coord in bbox_str.strip().split(',')]
+        except (ValueError, AttributeError):
+            try:
+                return [float(coord) for coord in bbox_str.strip().split()]
+            except Exception as e:
+                print(f"错误: 无法解析bbox字符串 '{bbox_str}'. 错误: {e}")
+                return None
+
+    def get_all_categories(self):
+        return self.categories
+
+    def get_sequence(self, category_name):
+        if category_name not in self.categories:
+            print(f"错误: 类别 '{category_name}' 不在数据集中。")
+            return None
+        category_path = os.path.join(self.root_dir, category_name)
+        color_dir = os.path.join(category_path, 'color')
+        depth_dir = os.path.join(category_path, 'depth')
+        gt_path = os.path.join(category_path, 'groundtruth_rect.txt')
+        nlp_path = os.path.join(category_path, 'nlp.txt')
+
+        if not all([os.path.isdir(color_dir), os.path.isdir(depth_dir), os.path.exists(gt_path), os.path.exists(nlp_path)]):
+            print(f"警告: 类别 '{category_name}' 数据不完整，跳过。")
+            return None
+        try:
+            color_images = sorted(glob.glob(os.path.join(color_dir, '*')))
+            depth_images = sorted(glob.glob(os.path.join(depth_dir, '*')))
+            with open(gt_path, 'r') as f:
+                gt_bboxes_str = f.readlines()
+            with open(nlp_path, 'r') as f:
+                nlp_text = f.read().strip()
+            num_frames = len(color_images)
+            if not (num_frames == len(depth_images) and num_frames == len(gt_bboxes_str)):
+                print(f"警告: 类别 '{category_name}' 的数据文件数量不匹配，跳过。")
+                return None
+            gt_bboxes = [self._parse_bbox(line) for line in gt_bboxes_str]
+            if any(bbox is None for bbox in gt_bboxes):
+                print(f"警告: 类别 '{category_name}' 的 groundtruth 文件中存在格式错误的行，跳过。")
+                return None
+            return {
+                'color_images': color_images,
+                'depth_images': depth_images,
+                'gt_bboxes': gt_bboxes,
+                'nlp': nlp_text,
+                'category': category_name
+            }
+        except Exception as e:
+            print(f"错误: 处理类别 '{category_name}' 时发生异常: {e}，跳过。")
+            return None
+
+# ====================================================================================
+# Part 2: Tracker Wrapper Class
+# ====================================================================================
+
+class SeqTrackV2Wrapper(object):
     def __init__(self, tracker_name='seqtrackv2', para_name=''):
-        # create tracker
-        tracker_info = Tracker(tracker_name, para_name, "our_data", None)
+        tracker_info = Tracker(tracker_name, para_name, "MY_DATA", None)
         params = tracker_info.get_parameters()
         params.visualization = False
         params.debug = False
         self.tracker = tracker_info.create_tracker(params)
 
-    def write(self, str):
-        txt_path = ""
-        file = open(txt_path, 'a')
-        file.write(str)
-
-    def initialize(self, img_rgb, selection, nlp = None):
-        # init on the 1st frame
-        # region = rect_from_mask(mask)
-        x, y, w, h = selection
-        bbox = [x,y,w,h]
-        self.H, self.W, _ = img_rgb.shape
+    def initialize(self, img_rgbd, bbox, nlp_sentence):
         init_info = {'init_bbox': bbox}
-        if nlp is not None:
-            init_info['init_nlp'] = nlp[0]
-        _ = self.tracker.initialize(img_rgb, init_info)
+        if nlp_sentence:
+            init_info['init_nlp'] = nlp_sentence
+        _ = self.tracker.initialize(img_rgbd, init_info)
+        print("跟踪器初始化完成。")
 
-    def track(self, img_rgb):
-        # track
-        outputs = self.tracker.track(img_rgb)
+    def track(self, img_rgbd):
+        outputs = self.tracker.track(img_rgbd)
         pred_bbox = outputs['target_bbox']
-        self.extract_and_save_boxes(pred_bbox)
-        max_score = outputs['best_score']  #.max().cpu().numpy()
+        max_score = outputs['best_score']
         return pred_bbox, max_score
 
-    def extract_and_save_boxes(self, boxes_pred_cxcywh,
-                               filepath:str = '/home/jinyankai/PycharmProject/SeqTrackv2/output_txt' ,
-                               save_format:str='cxcywh'):
-        """
-        Extracts predicted bounding boxes from model outputs and saves them to a text file.
+# ====================================================================================
+# Part 3: Main Execution Logic
+# ====================================================================================
 
-        Each box is written to a new line in the file.
-
-        Args:
-            boxes_pred_cxcywh (torch.Tensor): The raw output tensor from the model.
-            filepath (str): The path to the text file where boxes should be saved.
-            save_format (str): The format to save the boxes in ('xyxy' or 'cxcywh').
-                               Defaults to 'cxcywh'.
-        """
-        print(f"Extracting boxes and saving to {filepath}...")
-        # Disable gradient calculation for this operation as it's not for training
-        with torch.no_grad():
-            if save_format == 'xyxy':
-                boxes_to_save = box_cxcywh_to_xyxy(boxes_pred_cxcywh)
-            elif save_format == 'cxcywh':
-                boxes_to_save = boxes_pred_cxcywh
-            else:
-                raise ValueError("save_format must be either 'xyxy' or 'cxcywh'")
-
-            # --- File writing operation ---
-            try:
-                # Open the file in append mode ('a') to add new lines without
-                # overwriting existing content. Use 'w' to overwrite the file each time.
-                with open(filepath, 'a') as f:
-                    # Iterate over each predicted box in the batch
-                    for box in boxes_to_save:
-                        # Convert tensor elements to a list of numbers, then to strings
-                        # We round to a few decimal places for cleaner output
-                        box_coords = [f"{coord.item():.4f}" for coord in box]
-                        # Join coordinates with a comma and write to file with a newline
-                        line = ",".join(box_coords)
-                        f.write(line + '\n')
-                print(f"Successfully wrote {len(boxes_to_save)} boxes.")
-            except IOError as e:
-                print(f"Error: Could not write to file {filepath}. Reason: {e}")
-
-
-def run_our_data(tracker_name, para_name = 'seqtrackv2_b256', vis=False, out_conf=False, channel_type='rgbd'):
-
+def run_tracker_on_dataset(tracker_name, para_name, data_root, output_dir, vis=True):
     torch.set_num_threads(1)
-    save_root = os.path.join('', para_name)
-    if vis and (not os.path.exists(save_root)):
-        os.mkdir(save_root)
-    tracker = seqtrackv2(tracker_name=tracker_name, para_name=para_name)
-
-    if channel_type=='rgb':
-        channel_type=None
-    handle = our_data.Our_Data('RECTANGLE' , channels=channel_type)
-
-    selections = handle.region()
-    imagefiles = handle.frame()
-    nlp = handle.nlp()
-
-    if not imagefiles:
-        sys.exit(0)
-    if vis:
-        '''for vis'''
-        seq_name = imagefiles[0].split('/')[-3]
-        save_v_dir = os.path.join(save_root,seq_name)
-        if not os.path.exists(save_v_dir):
-            os.mkdir(save_v_dir)
-        cur_time = int(time.time() % 10000)
-        save_dir = os.path.join(save_v_dir, str(cur_time))
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-
-    # read rgbd data
-    if isinstance(imagefiles[0], list) and len(imagefiles[0])==2:
-        image = merge_img(imagefiles[0][0], imagefiles[0][1])
-    else:
-        image = cv2.cvtColor(cv2.imread(imagefiles[0]), cv2.COLOR_BGR2RGB) # Right
-
-    tracker.initialize(image, selections[0])
-
-    for idx , items in enumerate(imagefiles):
-        if idx == 0:
+    
+    output_txt_dir = os.path.join(output_dir, 'output_txt')
+    output_img_dir = os.path.join(output_dir, 'output_images')
+    os.makedirs(output_txt_dir, exist_ok=True)
+    os.makedirs(output_img_dir, exist_ok=True)
+    
+    dataset = TestDataset(root_dir=data_root)
+    tracker = SeqTrackV2Wrapper(tracker_name=tracker_name, para_name=para_name)
+    
+    all_aucs = []
+    
+    for category in dataset.get_all_categories():
+        print(f"\n{'='*20} 开始处理类别: {category} {'='*20}")
+        
+        sequence_data = dataset.get_sequence(category)
+        if not sequence_data:
             continue
-        img_list = items
-        if not img_list:
+        if len(sequence_data['color_images']) < 1:
+            print(f"类别 '{category}' 没有足够的帧，跳过。")
             continue
-        if isinstance(img_list, list) and len(img_list) == 2:
-            image = merge_img(img_list[0], img_list[1])
-        else:
-            image = cv2.cvtColor(cv2.imread(img_list), cv2.COLOR_BGR2RGB)
-        b1 , max_score = tracker.track(image)
 
-        if vis:
-            '''Visualization'''
-            # original image
-            image_ori = image[:,:,::-1].copy() # RGB --> BGR
-            image_name = img_list.split('/')[-1]
-            save_path = os.path.join(save_dir, image_name)
-            image_b = image_ori.copy()
-            cv2.rectangle(image_b, (int(b1[0]), int(b1[1])),
-                          (int(b1[0] + b1[2]), int(b1[1] + b1[3])), (0, 0, 255), 2)
-            image_b_name = image_name.replace('.jpg','_bbox.jpg')
-            save_path = os.path.join(save_dir, image_b_name)
-            cv2.imwrite(save_path, image_b)
+        # 用于存储当前序列的所有结果以计算AUC
+        sequence_pred_boxes = []
+        sequence_gt_boxes = []
 
+        output_txt_path = os.path.join(output_txt_dir, 'output.txt')
+        print(f"结果将写入: {output_txt_path}")
+        
+        with open(output_txt_path, 'w') as f:
+            # --- 处理第一帧 (初始化) ---
+            first_frame_idx = 0
+            gt_bbox_first_frame = sequence_data['gt_bboxes'][first_frame_idx]
+            
+            # 写入第一帧的真实GT
+            f.write(','.join(map(str, gt_bbox_first_frame)) + '\n')
+            
+            # 记录第一帧结果 (预测=真实)
+            sequence_pred_boxes.append(gt_bbox_first_frame)
+            sequence_gt_boxes.append(gt_bbox_first_frame)
+            
+            # 加载图像并初始化跟踪器
+            image_rgbd = get_rgbd_frame(sequence_data['color_images'][first_frame_idx], sequence_data['depth_images'][first_frame_idx])
+            tracker.initialize(image_rgbd, gt_bbox_first_frame, sequence_data['nlp'])
 
+            # --- 循环处理后续帧 (跟踪) ---
+            for frame_idx in range(1, len(sequence_data['color_images'])):
+                image_rgbd = get_rgbd_frame(sequence_data['color_images'][frame_idx], sequence_data['depth_images'][frame_idx])
+                
+                start_time = time.time()
+                pred_bbox, best_score = tracker.track(image_rgbd)
+                elapsed_time = time.time() - start_time
+                
+                print(f"帧 {frame_idx+1}/{len(sequence_data['color_images'])}: "
+                      f"预测BBox={pred_bbox}, Score={best_score:.4f}, "
+                      f"耗时={elapsed_time:.4f}s")
+                
+                f.write(','.join(map(str, pred_bbox)) + '\n')
+                
+                # 记录结果
+                sequence_pred_boxes.append(pred_bbox)
+                sequence_gt_boxes.append(sequence_data['gt_bboxes'][frame_idx])
+                
+                # --- 可视化 ---
+                if vis and (frame_idx + 1) % 10 == 0:
+                    vis_image = cv2.imread(sequence_data['color_images'][frame_idx])
+                    x, y, w, h = [int(v) for v in pred_bbox]
+                    cv2.rectangle(vis_image, (x, y), (x + w, y + h), (0, 0, 255), 2)
+                    gt_bbox = sequence_data['gt_bboxes'][frame_idx]
+                    x_gt, y_gt, w_gt, h_gt = [int(v) for v in gt_bbox]
+                    cv2.rectangle(vis_image, (x_gt, y_gt), (x_gt + w_gt, y_gt + h_gt), (0, 255, 0), 2)
+                    vis_category_dir = os.path.join(output_img_dir, category)
+                    os.makedirs(vis_category_dir, exist_ok=True)
+                    base_filename = os.path.basename(sequence_data['color_images'][frame_idx])
+                    save_filename = base_filename.rsplit('.', 1)[0] + '_bbox.jpg'
+                    save_path = os.path.join(vis_category_dir, save_filename)
+                    cv2.imwrite(save_path, vis_image)
+                    print(f"可视化结果已保存至: {save_path}")
 
+        # --- 计算并打印当前类别的AUC ---
+        category_auc = calculate_auc(sequence_pred_boxes, sequence_gt_boxes)
+        all_aucs.append(category_auc)
+        print(f"\n{'*'*10} 类别 '{category}' 评估结果 {'*'*10}")
+        print(f"AUC 得分: {category_auc:.4f}")
+        print(f"{'*'*40}")
 
+    # --- 计算并打印所有类别的平均AUC ---
+    if all_aucs:
+        mean_auc = np.mean(all_aucs)
+        print(f"\n{'='*20} 数据集总体评估结果 {'='*20}")
+        print(f"处理的总类别数: {len(all_aucs)}")
+        print(f"平均 AUC 得分: {mean_auc:.4f}")
+        print(f"{'='*60}")
 
+if __name__ == '__main__':
+    
+    # --- 正式运行 ---
+    # 在您的环境中，您应该使用真实的路径
+    # DATA_ROOT = '/data/our_data'
+    # OUTPUT_DIR = '/home/jzuser/Work_dir/SeqTrackv2'
+    run_tracker_on_dataset(
+        tracker_name='seqtrackv2',
+        para_name='seqtrackv2_b256',
+        data_root='/home/jzuser/Work_dir/SeqTrackv2/data/our_data',
+        output_dir='/home/jzuser/Work_dir/SeqTrackv2',
+        vis=True
+    )
