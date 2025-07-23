@@ -32,11 +32,6 @@ class MY_DATA(BaseDataset):
         for i, img_name in enumerate(image_files):
             depth_img_name = os.path.splitext(img_name)[0] + '.png'
 
-
-
-
-
-
     def _construct_sequence(self, sequence_name):
         # FIXME : according to our datasets structure
         class_name = sequence_name

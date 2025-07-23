@@ -24,7 +24,7 @@ class EnvSettings:
         self.got_packed_results_path = ''
         self.got_reports_path = ''
         self.tn_packed_results_path = ''
-        self.our_data_path = '/home/jinyankai/PycharmProject/SeqTrackv2/data/our_data'
+        self.our_data_path = '/home/jzuser/Work_dir/SeqTrackv2/data/our_data'
 
 
 def create_default_local_file():
@@ -114,6 +114,7 @@ def env_settings():
     env_module_name = 'lib.test.evaluation.local'
     try:
         env_module = importlib.import_module(env_module_name)
+        print('Using local environment settings from {}'.format(env_module_name))
         return env_module.local_env_settings()
     except:
         env_file = os.path.join(os.path.dirname(__file__), 'local.py')

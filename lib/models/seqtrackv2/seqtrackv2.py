@@ -7,7 +7,6 @@ from torch import nn
 import torch.nn.functional as F
 
 from lib.utils.misc import NestedTensor
-
 from .language_model import build_bert
 from .encoder import build_encoder
 from .decoder import build_decoder
@@ -203,7 +202,6 @@ def build_seqtrackv2(cfg):
     return model
 
 def load_pretrained(model, pretrained_path, strict=False):
-
     seqtrackv1 = torch.load(pretrained_path, map_location="cpu")
     state_dict = seqtrackv1['net']
     pos_st = state_dict['encoder.body.pos_embed']

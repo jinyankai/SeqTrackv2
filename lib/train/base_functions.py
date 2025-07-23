@@ -229,6 +229,42 @@ def build_dataloaders(cfg, settings):
 
     return loader_train
 
+def get_cosine_schedule_with_warmup(
+    optimizer: optim.Optimizer,
+    num_warmup_steps: int,
+    num_training_steps: int,
+    num_cycles: float = 0.5,
+    last_epoch: int = -1,
+):
+    """
+    创建学习率调度器，该调度器在预热期内从 0 线性增加到初始学习率，
+    然后在剩余时间内根据余弦函数的值进行衰减，直到降为 0。
+
+    Args:
+        optimizer (Optimizer): 需要进行调度的优化器。
+        num_warmup_steps (int): 学习率线性预热的步数。
+        num_training_steps (int): 总的训练步数。
+        num_cycles (float, optional): 余弦调度器的周期数 (0.5 表示从初始LR衰减到0)。 默认为 0.5。
+        last_epoch (int, optional): 上一个 epoch 的索引。默认为 -1。
+
+    Returns:
+        torch.optim.lr_scheduler.LambdaLR: 返回配置好的 LambdaLR 调度器。
+    """
+
+    def lr_lambda(current_step: int):
+        # 1. Warmup 阶段
+        if current_step < num_warmup_steps:
+            return float(current_step) / float(max(1, num_warmup_steps))
+        
+        # 2. Decay 阶段
+        progress = float(current_step - num_warmup_steps) / float(
+            max(1, num_training_steps - num_warmup_steps)
+        )
+        # cos() 函数的输入是从 0 到 pi
+        cosine_decay = 0.5 * (1.0 + math.cos(math.pi * num_cycles * 2.0 * progress))
+        return cosine_decay
+
+    return LambdaLR(optimizer, lr_lambda, last_epoch)
 
 def get_optimizer_scheduler(net, cfg):
     train_type = getattr(cfg.TRAIN, "TYPE", None)
@@ -240,11 +276,11 @@ def get_optimizer_scheduler(net, cfg):
             if ("prompt" not in n) and ("interface" not in n):
                 p.requires_grad = False
 
-        if is_main_process():
-            print("Learnable parameters are shown below.")
-            for n, p in net.named_parameters():
-                if p.requires_grad:
-                    print(n)
+        # if is_main_process():
+        #     print("Learnable parameters are shown below.")
+        #     for n, p in net.named_parameters():
+        #         if p.requires_grad:
+        #             print(n)
     else:
         param_dicts = [
             {"params": [p for n, p in net.named_parameters() if "encoder" not in n and p.requires_grad]},
@@ -253,11 +289,11 @@ def get_optimizer_scheduler(net, cfg):
                 "lr": cfg.TRAIN.LR * cfg.TRAIN.ENCODER_MULTIPLIER,
             },
         ]
-        if is_main_process():
-            print("Learnable parameters are shown below.")
-            for n, p in net.named_parameters():
-                if p.requires_grad:
-                    print(n)
+        # if is_main_process():
+        #     print("Learnable parameters are shown below.")
+        #     for n, p in net.named_parameters():
+        #         if p.requires_grad:
+        #             print(n)
 
     if cfg.TRAIN.OPTIMIZER == "ADAMW":
         optimizer = torch.optim.AdamW(param_dicts, lr=cfg.TRAIN.LR,
@@ -270,6 +306,70 @@ def get_optimizer_scheduler(net, cfg):
         lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
                                                             milestones=cfg.TRAIN.SCHEDULER.MILESTONES,
                                                             gamma=cfg.TRAIN.SCHEDULER.GAMMA)
+    elif cfg.TRAIN.SCHEDULER.TYPE == "cosine":
+        # Cosine Annealing: Smoothly decays LR following a cosine curve.
+        # Required cfg params:
+        #   - cfg.TRAIN.SCHEDULER.T_MAX (int): Maximum number of iterations (usually total epochs).
+        #   - cfg.TRAIN.SCHEDULER.ETA_MIN (float, optional): Minimum learning rate. Defaults to 0.
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,
+                                                      T_max=cfg.TRAIN.SCHEDULER.T_MAX,
+                                                      eta_min=getattr(cfg.TRAIN.SCHEDULER, 'ETA_MIN', 0))
+
+    elif cfg.TRAIN.SCHEDULER.TYPE == "cosine_restarts":
+        # Cosine Annealing with Warm Restarts: Restarts the cosine schedule every T_0 epochs.
+        # Required cfg params:
+        #   - cfg.TRAIN.SCHEDULER.T_0 (int): Number of epochs for the first restart.
+        #   - cfg.TRAIN.SCHEDULER.T_MULT (int, optional): A factor to increase T_i after a restart. Defaults to 1.
+        #   - cfg.TRAIN.SCHEDULER.ETA_MIN (float, optional): Minimum learning rate. Defaults to 0.
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer,
+                                                                T_0=cfg.TRAIN.SCHEDULER.T_0,
+                                                                T_mult=getattr(cfg.TRAIN.SCHEDULER, 'T_MULT', 1),
+                                                                eta_min=getattr(cfg.TRAIN.SCHEDULER, 'ETA_MIN', 0))
+                                                                
+    elif cfg.TRAIN.SCHEDULER.TYPE == 'exponential':
+        # Exponential LR: Decays the LR by gamma every epoch.
+        # Required cfg params:
+        #   - cfg.TRAIN.SCHEDULER.GAMMA (float): The multiplicative factor.
+        lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=cfg.TRAIN.SCHEDULER.GAMMA)
+
+    elif cfg.TRAIN.SCHEDULER.TYPE == 'plateau':
+        # ReduceLROnPlateau: Reduces LR when a metric has stopped improving.
+        # **SPECIAL USAGE**: Call scheduler.step(metric) in your validation loop.
+        # Required cfg params:
+        #   - cfg.TRAIN.SCHEDULER.MODE ('min' or 'max'): 'min' for loss, 'max' for accuracy.
+        #   - cfg.TRAIN.SCHEDULER.FACTOR (float): Factor by which the learning rate will be reduced.
+        #   - cfg.TRAIN.SCHEDULER.PATIENCE (int): Number of epochs with no improvement to wait.
+        lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,
+                                                      mode=cfg.TRAIN.SCHEDULER.MODE,
+                                                      factor=cfg.TRAIN.SCHEDULER.FACTOR,
+                                                      patience=cfg.TRAIN.SCHEDULER.PATIENCE,
+                                                      verbose=True)
+
+    elif cfg.TRAIN.SCHEDULER.TYPE == 'onecycle':
+        # OneCycleLR: A powerful scheduler that varies LR over one cycle.
+        # **SPECIAL USAGE**: Call scheduler.step() after every BATCH, not every epoch.
+        # Required cfg params:
+        #   - cfg.TRAIN.SCHEDULER.MAX_LR (float): Upper learning rate boundary.
+        #   - cfg.TRAIN.SCHEDULER.STEPS_PER_EPOCH (int): Number of batches in an epoch.
+        #   - cfg.TRAIN.SCHEDULER.EPOCHS (int): Total number of epochs.
+        lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,
+                                               max_lr=cfg.TRAIN.SCHEDULER.MAX_LR,
+                                               steps_per_epoch=cfg.TRAIN.SCHEDULER.STEPS_PER_EPOCH,
+                                               epochs=cfg.TRAIN.SCHEDULER.EPOCHS)
+
+    elif cfg.TRAIN.SCHEDULER.TYPE == 'warm_up consine':
+        lr_scheduler = get_cosine_schedule_with_warmup(
+            optimizer,
+            num_warmup_steps=cfg.TRAIN.SCHEDULER.NUM_WARMUP_STEPS,
+            num_training_steps=cfg.TRAIN.SCHEDULER.NUM_TRAINING_STEPS,
+            num_cycles=cfg.TRAIN.SCHEDULER.NUM_CYCLES
+        )
+    
+    elif cfg.TRAIN.SCHEDULER.TYPE == 'none':
+        # No scheduler, constant learning rate.
+        lr_scheduler = None
+
     else:
-        raise ValueError("Unsupported scheduler")
+        raise ValueError(f"Unsupported scheduler: {cfg.TRAIN.SCHEDULER.TYPE}")
+        raise ValueError(f"Unsupported scheduler: {cfg.TRAIN.SCHEDULER.TYPE}")
     return optimizer, lr_scheduler

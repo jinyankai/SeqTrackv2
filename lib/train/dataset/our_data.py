@@ -3,7 +3,7 @@ import torch.utils.data
 from lib.train.data.image_loader import jpeg4py_loader,opencv_loader
 # 假设 base_image_dataset.py 与此文件在同一目录或在 Python 路径中
 import sys
-sys.path.append('/home/jinyankai/PycharmProject/SeqTrackv2/lib/train/dataset')
+sys.path.append('/home/jzuser/Work_dir/SeqTrackv2/lib/train/dataset')
 from base_video_dataset import  BaseVideoDataset
 from depth_utils import merge_img
 from PIL import Image
@@ -60,7 +60,7 @@ class MyDataset(BaseVideoDataset):
             bboxes = self._load_bboxes(bbox_file_path)
             descriptions = []
             with open(desc_file_path, 'r', encoding='utf-8') as f:
-                description = f.readline().strip()
+                description = f.readline().strip() 
             descriptions.append(description)
 
             image_files = sorted(os.listdir(img_folder_path))
@@ -74,17 +74,19 @@ class MyDataset(BaseVideoDataset):
             frames = []
             for i, img_name in enumerate(image_files):
                 depth_img_name = os.path.splitext(img_name)[0] + '.png'
+                new_descriptions = [descriptions[0] +f"This is the {i}th frame in the sequence."]
                 frame_entry = {
                     'rgb_path': os.path.join(img_folder_path, img_name),
                     'depth_path': os.path.join(depth_folder_path, depth_img_name),
                     'bbox': bboxes[i],
+                    'description': new_descriptions,
                 }
                 frames.append(frame_entry)
 
             # 将整个序列的信息作为一个字典添加到列表中
+            
             sequences.append({
                 'class': class_name,
-                'description': descriptions,
                 'frames': frames,
             })
 
@@ -159,9 +161,9 @@ class MyDataset(BaseVideoDataset):
 
         frame_list = []
         anno_list = []
+        nlp_list = []
         for f_id in frame_ids:
             frame_info = sequence['frames'][f_id]
-
             # 加载RGB和深度图像，并进行堆叠
             rgb_image = self.image_loader(frame_info['rgb_path'])
             depth_image = np.array(Image.open(frame_info['depth_path']).convert('L'))
@@ -169,10 +171,11 @@ class MyDataset(BaseVideoDataset):
             # rgbd_image_processed = rgbd_image.astype(np.float32).transpose((2, 0, 1))
             frame_list.append(rgbd_image)
             anno_list.append(frame_info['bbox'])
+            nlp_list.append(frame_info['description'])
 
         # 格式化标注
         anno_frames = {'bbox': anno_list,
-                       'nlp' : sequence['description']}
+                       'nlp' : nlp_list}
 
         object_meta = OrderedDict({
             'object_class_name': class_name,

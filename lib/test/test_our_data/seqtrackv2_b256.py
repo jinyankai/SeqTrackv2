@@ -5,5 +5,5 @@ if env_path not in sys.path:
     sys.path.append(env_path)
 from lib.test.test_our_data.seqtrackv2 import run_our_data
 
-run_our_data('seqtrackv2', 'seqtrackv2_b256', vis=False, out_conf=True, channel_type='rgbd')
+run_our_data('seqtrackv2', 'seqtrackv2_b256', vis=True, out_conf=True, channel_type='rgbd')
 

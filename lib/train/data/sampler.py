@@ -11,6 +11,18 @@ import os
 def no_processing(data):
     return data
 
+def get_sampling_mode(epoch):
+    if epoch < 50:  # 阶段一
+        # 50% Causal, 50% Order
+        return random.choices(['causal', 'order'], weights=[0.5, 0.5], k=1)[0]
+    elif 50 <= epoch < 100:  # 阶段二
+        # 20% Causal, 20% Order, 60% Trident
+        return random.choices(['causal', 'order', 'trident'], weights=[0.2, 0.2, 0.6], k=1)[0]
+    else:  # 阶段三
+        # 10% Causal, 10% Order, 40% Trident, 40% STARK
+        return random.choices(['causal', 'order', 'trident', 'stark'], weights=[0.1, 0.1, 0.4, 0.4], k=1)[0]
+
+
 
 class TrackingSampler(torch.utils.data.Dataset):
     """ Class responsible for sampling frames from training sequences to form batches. 
@@ -52,8 +64,6 @@ class TrackingSampler(torch.utils.data.Dataset):
         # Normalize
         p_total = sum(p_datasets)
         self.p_datasets = [x / p_total for x in p_datasets]
-
-
         self.samples_per_epoch = samples_per_epoch
         self.max_gap = max_gap
         self.num_search_frames = num_search_frames
@@ -104,6 +114,10 @@ class TrackingSampler(torch.utils.data.Dataset):
             return None
 
         return random.choices(valid_ids, k=num_ids)
+    def update_sampler_mode(self, epoch):
+        """ Update the frame sampling mode based on the current epoch """
+        self.frame_sample_mode = get_sampling_mode(epoch)
+        print(f"Updated frame sample mode to: {self.frame_sample_mode}")
 
     def __getitem__(self, index):
         if self.train_cls:
@@ -193,7 +207,7 @@ class TrackingSampler(torch.utils.data.Dataset):
                     # nlp = template_anno['nlp'][0]
                     nlp = template_anno.get("nlp", None)
                     if nlp is not None:
-                        nlp = nlp[0]
+                        nlp = nlp[search_frame_ids][0]
                         nlp_token_ids, nlp_token_masks = self.extract_token_from_nlp(nlp, self.max_query_len)
                         data['nl_token_ids'] = nlp_token_ids
                         data['nl_token_masks'] = nlp_token_masks
@@ -210,13 +224,6 @@ class TrackingSampler(torch.utils.data.Dataset):
             count_valid += 1
             if count_valid > 200:
                 print("too large count_valid, check the sampler, current count_valid: "+str(count_valid))
-
-        # self.show(data, 'template', 0, 'rgb')
-        # self.show(data, 'template', 0, 'dte')
-        # self.show(data, 'template', 1, 'rgb')
-        # self.show(data, 'template', 1, 'dte')
-        # self.show(data, 'search', 0, 'rgb')
-        # self.show(data, 'search', 0, 'dte')
 
         return data
 

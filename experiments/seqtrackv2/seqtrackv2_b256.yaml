@@ -25,7 +25,8 @@ DATA:
     - MY_DATA
     DATASETS_RATIO:
     - 1
-    SAMPLE_PER_EPOCH: 60000
+    SAMPLE_PER_EPOCH: 12000
+
 
 MODEL:
   LANGUAGE:
@@ -54,18 +55,22 @@ TRAIN:
   EPOCH: 240
   GRAD_CLIP_NORM: 0.1
   CE_WEIGHT: 1.0
-  LR: 0.0004
+  LR: 0.00005
   LR_DROP_EPOCH: 192
   NUM_WORKER: 8
   OPTIMIZER: ADAMW
   PRINT_INTERVAL: 50
   SCHEDULER:
-    TYPE: step
+    TYPE: cosine
     DECAY_RATE: 0.1
+    T_MAX : 240
+    NUM_TRAINING_STEPS : 200000
+    NUM_WARMUP_STEPS: 200
+    NUM_CYCLES: 1
   WEIGHT_DECAY: 0.0001
   TYPE: peft
   FIX_BN: True
-  PRETRAINED_PATH: 'pretrained/seqtrack/seqtrack_b256/SEQTRACK_ep0500.pth.tar'
+  PRETRAINED_PATH: '/home//jzuser/Work_dir/SeqTrackv2/pretrained/seqtrack/seqtrack_b256/SEQTRACK_ep0500.pth.tar'
 
 TEST:
   EPOCH: 240
