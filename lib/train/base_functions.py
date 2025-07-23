@@ -281,6 +281,11 @@ def get_optimizer_scheduler(net, cfg):
         #     for n, p in net.named_parameters():
         #         if p.requires_grad:
         #             print(n)
+        # if is_main_process():
+        #     print("Learnable parameters are shown below.")
+        #     for n, p in net.named_parameters():
+        #         if p.requires_grad:
+        #             print(n)
     else:
         param_dicts = [
             {"params": [p for n, p in net.named_parameters() if "encoder" not in n and p.requires_grad]},
@@ -289,6 +294,11 @@ def get_optimizer_scheduler(net, cfg):
                 "lr": cfg.TRAIN.LR * cfg.TRAIN.ENCODER_MULTIPLIER,
             },
         ]
+        # if is_main_process():
+        #     print("Learnable parameters are shown below.")
+        #     for n, p in net.named_parameters():
+        #         if p.requires_grad:
+        #             print(n)
         # if is_main_process():
         #     print("Learnable parameters are shown below.")
         #     for n, p in net.named_parameters():

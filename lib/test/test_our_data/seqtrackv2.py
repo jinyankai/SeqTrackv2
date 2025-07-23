@@ -13,6 +13,7 @@ import math
 sys.path.append('../..')  # Adjust the path as necessary
 from lib.test.evaluation import Tracker
 from lib.train.dataset.depth_utils import get_rgbd_frame
+from lib.train.dataset.depth_utils import get_rgbd_frame
 from lib.utils.box_ops import box_cxcywh_to_xyxy
 
 # ====================================================================================
@@ -77,6 +78,7 @@ class TestDataset:
 # ====================================================================================
 class SeqTrackV2Wrapper:
     def __init__(self, tracker_name='seqtrackv2', para_name=''):
+        tracker_info = Tracker(tracker_name, para_name, "MY_DATA", None)
         tracker_info = Tracker(tracker_name, para_name, "MY_DATA", None)
         params = tracker_info.get_parameters()
         params.visualization = False
