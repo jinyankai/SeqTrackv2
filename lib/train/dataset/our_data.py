@@ -45,7 +45,8 @@ class MyDataset(BaseVideoDataset):
         """
         sequences = []
         class_names = sorted([d for d in os.listdir(self.root) if os.path.isdir(os.path.join(self.root, d))])
-
+        # remove some class
+        class_names = [name for name in class_names if name not in ['deer1']]
         for class_name in class_names:
             class_path = os.path.join(self.root, class_name)
             img_folder_path = os.path.join(class_path, 'color')

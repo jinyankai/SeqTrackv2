@@ -61,6 +61,7 @@ class LTRTrainer(BaseTrainer):
         print("Current Epoch: ", self.epoch)
         # print(loader.training)
 
+
         for i, data in enumerate(loader, 1):
             if self.move_data_to_gpu:
                 data = data.to(self.device)
@@ -104,6 +105,7 @@ class LTRTrainer(BaseTrainer):
                 # 2021.1.10 Set epoch
                 if isinstance(loader.sampler, DistributedSampler):
                     loader.sampler.set_epoch(self.epoch)
+                    loader.sampler.update_sampler_mode(self.epoch)
                 self.cycle_dataset(loader)
 
         self._stats_new_epoch()
