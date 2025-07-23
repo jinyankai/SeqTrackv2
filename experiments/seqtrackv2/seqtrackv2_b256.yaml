@@ -62,6 +62,7 @@ TRAIN:
   SCHEDULER:
     TYPE: step
     DECAY_RATE: 0.1
+    T_MAX : 240
   WEIGHT_DECAY: 0.0001
   TYPE: peft
   FIX_BN: True
