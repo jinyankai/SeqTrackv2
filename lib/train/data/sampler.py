@@ -12,15 +12,15 @@ def no_processing(data):
     return data
 
 def get_sampling_mode(epoch):
-    if epoch < 50:  # 阶段一
+    if epoch < 10:  # 阶段一
         # 50% Causal, 50% Order
-        return random.choices(['causal', 'order'], weights=[0.5, 0.5], k=1)[0]
-    elif 50 <= epoch < 100:  # 阶段二
+        return random.choices(['causual', 'order'], weights=[0.5, 0.5], k=1)[0]
+    elif 10 <= epoch < 100:  # 阶段二
         # 20% Causal, 20% Order, 60% Trident
-        return random.choices(['causal', 'order', 'trident'], weights=[0.2, 0.2, 0.6], k=1)[0]
+        return random.choices(['causual', 'order', 'trident'], weights=[0.2, 0.2, 0.6], k=1)[0]
     else:  # 阶段三
         # 10% Causal, 10% Order, 40% Trident, 40% STARK
-        return random.choices(['causal', 'order', 'trident', 'stark'], weights=[0.1, 0.1, 0.4, 0.4], k=1)[0]
+        return random.choices(['causual', 'order', 'trident', 'stark'], weights=[0.1, 0.1, 0.4, 0.4], k=1)[0]
 
 
 
@@ -147,7 +147,7 @@ class TrackingSampler(torch.utils.data.Dataset):
                 search_frame_ids = None
                 gap_increase = 0
 
-                if self.frame_sample_mode == 'causal':
+                if self.frame_sample_mode == 'causual':
                     # Sample test and train frames in a causal manner, i.e. search_frame_ids > template_frame_ids
                     while search_frame_ids is None:
 
@@ -187,11 +187,11 @@ class TrackingSampler(torch.utils.data.Dataset):
             try:
                 template_frames, template_anno, meta_obj_train = dataset.get_frames(seq_id, template_frame_ids, seq_info_dict)
                 search_frames, search_anno, meta_obj_test = dataset.get_frames(seq_id, search_frame_ids, seq_info_dict)
-
+                
                 H, W, _ = template_frames[0].shape
-
                 template_masks = template_anno['mask'] if 'mask' in template_anno else [torch.zeros((H, W))] * self.num_template_frames
                 search_masks = search_anno['mask'] if 'mask' in search_anno else [torch.zeros((H, W))] * self.num_search_frames
+                
                 data = TensorDict({'template_images': template_frames,
                                    'template_anno': template_anno['bbox'],
                                    'template_masks': template_masks,
@@ -207,10 +207,12 @@ class TrackingSampler(torch.utils.data.Dataset):
                     # nlp = template_anno['nlp'][0]
                     nlp = template_anno.get("nlp", None)
                     if nlp is not None:
-                        nlp = nlp[search_frame_ids][0]
+                        nlp = nlp[0]
                         nlp_token_ids, nlp_token_masks = self.extract_token_from_nlp(nlp, self.max_query_len)
                         data['nl_token_ids'] = nlp_token_ids
                         data['nl_token_masks'] = nlp_token_masks
+                        
+
 
                 # make data augmentation
                 data = self.processing(data)

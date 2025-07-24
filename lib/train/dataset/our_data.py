@@ -75,12 +75,10 @@ class MyDataset(BaseVideoDataset):
             frames = []
             for i, img_name in enumerate(image_files):
                 depth_img_name = os.path.splitext(img_name)[0] + '.png'
-                new_descriptions = [descriptions[0] +f"This is the {i}th frame in the sequence."]
                 frame_entry = {
                     'rgb_path': os.path.join(img_folder_path, img_name),
                     'depth_path': os.path.join(depth_folder_path, depth_img_name),
                     'bbox': bboxes[i],
-                    'description': new_descriptions,
                 }
                 frames.append(frame_entry)
 
@@ -89,6 +87,7 @@ class MyDataset(BaseVideoDataset):
             sequences.append({
                 'class': class_name,
                 'frames': frames,
+                'nlp' : descriptions
             })
 
         return sequences
@@ -162,7 +161,7 @@ class MyDataset(BaseVideoDataset):
 
         frame_list = []
         anno_list = []
-        nlp_list = []
+
         for f_id in frame_ids:
             frame_info = sequence['frames'][f_id]
             # 加载RGB和深度图像，并进行堆叠
@@ -172,11 +171,10 @@ class MyDataset(BaseVideoDataset):
             # rgbd_image_processed = rgbd_image.astype(np.float32).transpose((2, 0, 1))
             frame_list.append(rgbd_image)
             anno_list.append(frame_info['bbox'])
-            nlp_list.append(frame_info['description'])
 
         # 格式化标注
         anno_frames = {'bbox': anno_list,
-                       'nlp' : nlp_list}
+                       'nlp' : sequence['nlp']}
 
         object_meta = OrderedDict({
             'object_class_name': class_name,

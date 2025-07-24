@@ -1,6 +1,9 @@
 import torch
 from torch.utils.data.distributed import DistributedSampler
 import torch.nn as nn
+import torch.optim as optim
+import math
+import torch.optim.lr_scheduler
 
 # datasets related
 from lib.train.dataset import Lasot, Got10k, MSCOCOSeq, ImagenetVID, TrackingNet, Imagenet1k,our_data

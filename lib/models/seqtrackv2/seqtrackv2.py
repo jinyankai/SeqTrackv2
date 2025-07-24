@@ -13,7 +13,6 @@ from .decoder import build_decoder
 from lib.utils.box_ops import box_xyxy_to_cxcywh
 from lib.utils.pos_embed import get_sinusoid_encoding_table, get_2d_sincos_pos_embed
 
-
 class SEQTRACKV2(nn.Module):
     """ This is the base class for SeqTrackV2"""
     def __init__(self, language_interface_extractor, encoder, decoder, hidden_dim,
