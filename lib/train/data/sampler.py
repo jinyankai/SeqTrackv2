@@ -12,15 +12,12 @@ def no_processing(data):
     return data
 
 def get_sampling_mode(epoch):
-    if epoch < 10:  # 阶段一
+    if epoch < 100:  # 阶段一
         # 50% Causal, 50% Order
         return random.choices(['causual', 'order'], weights=[0.5, 0.5], k=1)[0]
-    elif 10 <= epoch < 100:  # 阶段二
-        # 20% Causal, 20% Order, 60% Trident
-        return random.choices(['causual', 'order', 'trident'], weights=[0.2, 0.2, 0.6], k=1)[0]
     else:  # 阶段三
         # 10% Causal, 10% Order, 40% Trident, 40% STARK
-        return random.choices(['causual', 'order', 'trident', 'stark'], weights=[0.1, 0.1, 0.4, 0.4], k=1)[0]
+        return random.choices(['causual', 'order'], weights=[0.5, 0.5], k=1)[0]
 
 
 

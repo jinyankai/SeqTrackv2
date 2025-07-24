@@ -1,5 +1,5 @@
 DATA:
-  MAX_SAMPLE_INTERVAL: 400
+  MAX_SAMPLE_INTERVAL: 500
   MEAN:
   - 0.485
   - 0.456
@@ -70,7 +70,7 @@ TRAIN:
   WEIGHT_DECAY: 0.0001
   TYPE: peft
   FIX_BN: True
-  PRETRAINED_PATH: '/home//jzuser/Work_dir/SeqTrackv2/pretrained/seqtrack/seqtrack_b256/SEQTRACK_ep0500.pth.tar'
+  PRETRAINED_PATH: '/home/jzuser/Work_dir/SeqTrackv2/pretrained/seqtrack/seqtrack_b256/SEQTRACK_ep0500.pth.tar'
 
 TEST:
   EPOCH: 240
