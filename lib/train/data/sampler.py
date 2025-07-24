@@ -81,6 +81,7 @@ class TrackingSampler(torch.utils.data.Dataset):
     def __len__(self):
         return self.samples_per_epoch
 
+
     def _sample_visible_ids(self, visible, num_ids=1, min_id=None, max_id=None,
                             allow_invisible=False, force_invisible=False):
         """ Samples num_ids frames between min_id and max_id for which target is visible
@@ -500,71 +501,71 @@ class TrackingSampler(torch.utils.data.Dataset):
         return input_ids, input_mask
 
 
-if __name__ == '__main__':
-    import sys
-    sys.path.append('/home/jinyankai/PycharmProject/SeqTrackv2/lib/train/dataset')
-    from our_data import MyDataset
-    NUM_SEQUENCES = 1
-    NUM_FRAMES = 3000
-    BATCH_SIZE = 4
-    SAMPLES_PER_EPOCH = 5
-    NUM_TEMPLATE_FRAMES = 1
-    NUM_SEARCH_FRAMES = 1
-    dataset_root = '/home/jinyankai/PycharmProject/SeqTrackv2/data'
-    try:
-        datasets = MyDataset(name='my_multi_sequence_dataset', root_path=dataset_root)
-        sampler = TrackingSampler(datasets=[datasets] , p_datasets=None,
-                samples_per_epoch=SAMPLES_PER_EPOCH,
-                max_gap=10,
-                num_search_frames=NUM_SEARCH_FRAMES,
-                num_template_frames=NUM_TEMPLATE_FRAMES)
-        print("成功实例化 TrackingSampler。")
+# if __name__ == '__main__':
+#     import sys
+#     sys.path.append('/home/jinyankai/PycharmProject/SeqTrackv2/lib/train/dataset')
+#     from our_data import MyDataset
+#     NUM_SEQUENCES = 1
+#     NUM_FRAMES = 3000
+#     BATCH_SIZE = 4
+#     SAMPLES_PER_EPOCH = 5
+#     NUM_TEMPLATE_FRAMES = 1
+#     NUM_SEARCH_FRAMES = 1
+#     dataset_root = '/home/jinyankai/PycharmProject/SeqTrackv2/data'
+#     try:
+#         datasets = MyDataset(name='my_multi_sequence_dataset', root_path=dataset_root)
+#         sampler = TrackingSampler(datasets=[datasets] , p_datasets=None,
+#                 samples_per_epoch=SAMPLES_PER_EPOCH,
+#                 max_gap=10,
+#                 num_search_frames=NUM_SEARCH_FRAMES,
+#                 num_template_frames=NUM_TEMPLATE_FRAMES)
+#         print("成功实例化 TrackingSampler。")
 
-        # 5. 实例化 DataLoader
-        # PyTorch 的默认 collate_fn 足够智能，可以处理这种结构
-        data_loader = torch.utils.data.DataLoader(
-            sampler,
-            batch_size=BATCH_SIZE,
-            shuffle=False,
-            num_workers=0
-        )
-        print(f"成功实例化 DataLoader with batch_size={BATCH_SIZE}。")
+#         # 5. 实例化 DataLoader
+#         # PyTorch 的默认 collate_fn 足够智能，可以处理这种结构
+#         data_loader = torch.utils.data.DataLoader(
+#             sampler,
+#             batch_size=BATCH_SIZE,
+#             shuffle=False,
+#             num_workers=0
+#         )
+#         print(f"成功实例化 DataLoader with batch_size={BATCH_SIZE}。")
 
-        # 6. 迭代并检查数据
-        print("\n--- 开始测试数据加载 ---")
-        for i, data in enumerate(data_loader):
-            if i >= 3:  # 只测试前3个批次
-                break
+#         # 6. 迭代并检查数据
+#         print("\n--- 开始测试数据加载 ---")
+#         for i, data in enumerate(data_loader):
+#             if i >= 3:  # 只测试前3个批次
+#                 break
 
-            print(f"\n[批次 {i + 1}]")
-            print("  数据包键:", list(data.keys()))
+#             print(f"\n[批次 {i + 1}]")
+#             print("  数据包键:", list(data.keys()))
 
-            # 检查模板数据
-            # 期望形状: [Batch, NumFrames, Height, Width, Channels]
-            # 由于我们把NumFrames=1的数据堆叠起来，所以形状是 [B, H, W, C]
-            template_images = data['template_images']
-            template_annos = data['template_anno']
-            print(f"  - template_images shape: {template_images[0].shape} (Batch, H, W, Channels)")
-            print(f"  - template_images dtype: {template_images[0].dtype}")
-            print(f"  - template_anno shape:   {template_annos[0].shape} (Batch, NumFrames, 4)")
-            print(f"  - template_anno dtype:   {template_annos[0].dtype}")
+#             # 检查模板数据
+#             # 期望形状: [Batch, NumFrames, Height, Width, Channels]
+#             # 由于我们把NumFrames=1的数据堆叠起来，所以形状是 [B, H, W, C]
+#             template_images = data['template_images']
+#             template_annos = data['template_anno']
+#             print(f"  - template_images shape: {template_images[0].shape} (Batch, H, W, Channels)")
+#             print(f"  - template_images dtype: {template_images[0].dtype}")
+#             print(f"  - template_anno shape:   {template_annos[0].shape} (Batch, NumFrames, 4)")
+#             print(f"  - template_anno dtype:   {template_annos[0].dtype}")
 
-            # 检查搜索数据
-            search_images = data['search_images']
-            search_annos = data['search_anno']
-            print(f"  - search_images shape:   {search_images[0].shape} (Batch, H, W, Channels)")
-            print(f"  - search_images dtype:   {search_images[0].dtype}")
-            print(f"  - search_anno shape:     {search_annos[0].shape} (Batch, NumFrames, 4)")
-            print(f"  - search_anno dtype:     {search_annos[0].dtype}")
-            print(f"  - dataset:               {data['dataset']}")
+#             # 检查搜索数据
+#             search_images = data['search_images']
+#             search_annos = data['search_anno']
+#             print(f"  - search_images shape:   {search_images[0].shape} (Batch, H, W, Channels)")
+#             print(f"  - search_images dtype:   {search_images[0].dtype}")
+#             print(f"  - search_anno shape:     {search_annos[0].shape} (Batch, NumFrames, 4)")
+#             print(f"  - search_anno dtype:     {search_annos[0].dtype}")
+#             print(f"  - dataset:               {data['dataset']}")
 
-        print("\n--- 测试成功 ---")
-        print("输出的数据形状符合预期，MyDataset 和 TrackingSampler 看起来已正确适配。")
+#         print("\n--- 测试成功 ---")
+#         print("输出的数据形状符合预期，MyDataset 和 TrackingSampler 看起来已正确适配。")
 
-    except Exception as e:
-        print(f"\n--- 测试失败 ---")
-        print(f"发生错误: {e}")
-        import traceback
+#     except Exception as e:
+#         print(f"\n--- 测试失败 ---")
+#         print(f"发生错误: {e}")
+#         import traceback
 
-        traceback.print_exc()
+#         traceback.print_exc()
 

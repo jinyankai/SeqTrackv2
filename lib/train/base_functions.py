@@ -267,7 +267,7 @@ def get_cosine_schedule_with_warmup(
         cosine_decay = 0.5 * (1.0 + math.cos(math.pi * num_cycles * 2.0 * progress))
         return cosine_decay
 
-    return LambdaLR(optimizer, lr_lambda, last_epoch)
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda, last_epoch)
 
 def get_optimizer_scheduler(net, cfg):
     train_type = getattr(cfg.TRAIN, "TYPE", None)
